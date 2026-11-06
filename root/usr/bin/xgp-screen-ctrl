@@ -1,0 +1,60 @@
+#!/bin/sh
+# xgp-screen-ctrl: Hardware screen brightness & backlight control for XiGuaPi V3
+
+# Detect backlight control path
+BRIGHTNESS_PATH=""
+if [ -f "/sys/class/leds/blue:backlight/brightness" ]; then
+    BRIGHTNESS_PATH="/sys/class/leds/blue:backlight/brightness"
+elif [ -d "/sys/class/backlight" ]; then
+    for p in /sys/class/backlight/*/brightness; do
+        if [ -f "$p" ]; then
+            BRIGHTNESS_PATH="$p"
+            break
+        fi
+    done
+fi
+
+if [ -z "$BRIGHTNESS_PATH" ]; then
+    exit 1
+fi
+
+ACTION="$1"
+
+case "$ACTION" in
+    off)
+        echo 0 > "$BRIGHTNESS_PATH" 2>/dev/null
+        exit 0
+        ;;
+    on)
+        TARGET="${2:-128}"
+        ;;
+    get)
+        cat "$BRIGHTNESS_PATH" 2>/dev/null || echo 0
+        exit 0
+        ;;
+    set)
+        TARGET="$2"
+        ;;
+    [0-9]*)
+        # Direct numeric call, e.g. "xgp-screen-ctrl 128"
+        TARGET="$1"
+        ;;
+    *)
+        echo "Usage: $0 {on [0-255] | off | set <0-255> | get | <0-255>}" >&2
+        exit 1
+        ;;
+esac
+
+# Validate target range (0-255)
+case "$TARGET" in
+    ''|*[!0-9]*) exit 1 ;;
+    *) ;;
+esac
+
+if [ "$TARGET" -lt 0 ] 2>/dev/null || [ "$TARGET" -gt 255 ] 2>/dev/null; then
+    exit 1
+fi
+
+echo "$TARGET" > "$BRIGHTNESS_PATH" 2>/dev/null
+exit 0
+

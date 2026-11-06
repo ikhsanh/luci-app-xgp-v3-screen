@@ -1,0 +1,111 @@
+#!/bin/sh
+
+# xgp-screen-daemon: Background manager for XiGuaPi V3 LCD Screen
+# Handles: Master Enable, Brightness, Interval On/Off, and Scheduled Times
+
+LAST_STATE=-1
+LAST_BRIGHTNESS=-1
+
+is_time_in_range() {
+    local start_str="$1"
+    local end_str="$2"
+
+    local s_h=$(echo "$start_str" | cut -d: -f1 | sed 's/^0*//')
+    local s_m=$(echo "$start_str" | cut -d: -f2 | sed 's/^0*//')
+    [ -z "$s_h" ] && s_h=0
+    [ -z "$s_m" ] && s_m=0
+    local start_min=$(( s_h * 60 + s_m ))
+
+    local e_h=$(echo "$end_str" | cut -d: -f1 | sed 's/^0*//')
+    local e_m=$(echo "$end_str" | cut -d: -f2 | sed 's/^0*//')
+    [ -z "$e_h" ] && e_h=0
+    [ -z "$e_m" ] && e_m=0
+    local end_min=$(( e_h * 60 + e_m ))
+
+    local now_h=$(date +%H | sed 's/^0*//')
+    local now_m=$(date +%M | sed 's/^0*//')
+    [ -z "$now_h" ] && now_h=0
+    [ -z "$now_m" ] && now_m=0
+    local now_min=$(( now_h * 60 + now_m ))
+
+    if [ $start_min -eq $end_min ]; then
+        return 0
+    elif [ $start_min -lt $end_min ]; then
+        if [ $now_min -ge $start_min ] && [ $now_min -lt $end_min ]; then
+            return 0
+        else
+            return 1
+        fi
+    else
+        # Overnight range, e.g. 22:00 to 06:00
+        if [ $now_min -ge $start_min ] || [ $now_min -lt $end_min ]; then
+            return 0
+        else
+            return 1
+        fi
+    fi
+}
+
+while true; do
+    # Read UCI configurations
+    enabled=$(uci -q get xgp_screen.config.enabled || echo 1)
+    brightness=$(uci -q get xgp_screen.config.brightness || echo 128)
+    
+    interval_enable=$(uci -q get xgp_screen.config.interval_enable || echo 0)
+    interval_on=$(uci -q get xgp_screen.config.interval_on || echo 10)
+    interval_off=$(uci -q get xgp_screen.config.interval_off || echo 10)
+    
+    schedule_enable=$(uci -q get xgp_screen.config.schedule_enable || echo 0)
+    schedule_start=$(uci -q get xgp_screen.config.schedule_start || echo "20:00")
+    schedule_end=$(uci -q get xgp_screen.config.schedule_end || echo "23:00")
+
+    target_on=1
+
+    # 1. Check Master Switch
+    if [ "$enabled" != "1" ]; then
+        target_on=0
+    fi
+
+    # 2. Check Schedule (Time-based ON/OFF)
+    if [ $target_on -eq 1 ] && [ "$schedule_enable" = "1" ]; then
+        if ! is_time_in_range "$schedule_start" "$schedule_end"; then
+            target_on=0
+        fi
+    fi
+
+    # 3. Check Interval (e.g. 10 mins ON, 10 mins OFF)
+    if [ $target_on -eq 1 ] && [ "$interval_enable" = "1" ]; then
+        [ -z "$interval_on" ] || [ "$interval_on" -le 0 ] && interval_on=10
+        [ -z "$interval_off" ] || [ "$interval_off" -le 0 ] && interval_off=10
+        total_cycle=$(( interval_on + interval_off ))
+        
+        now_epoch=$(date +%s)
+        now_minutes=$(( now_epoch / 60 ))
+        cycle_phase=$(( now_minutes % total_cycle ))
+        
+        if [ $cycle_phase -ge $interval_on ]; then
+            target_on=0
+        fi
+    fi
+
+    # Apply State Changes
+    if [ $target_on -ne $LAST_STATE ] || [ $brightness -ne $LAST_BRIGHTNESS ]; then
+        if [ $target_on -eq 1 ]; then
+            /usr/bin/xgp-screen-ctrl on "$brightness"
+            # Ensure display rendering process is running
+            if ! pgrep -f zz_xgp_screen >/dev/null 2>&1; then
+                /etc/init.d/zz_xgp_screen start 2>/dev/null
+            fi
+        else
+            /usr/bin/xgp-screen-ctrl off
+            # If disabled from master switch, also stop rendering process
+            if [ "$enabled" != "1" ]; then
+                /etc/init.d/zz_xgp_screen stop 2>/dev/null
+            fi
+        fi
+        LAST_STATE=$target_on
+        LAST_BRIGHTNESS=$brightness
+    fi
+
+    sleep 5
+done

@@ -1,0 +1,10 @@
+config xgp_screen 'config'
+	option enabled '1'
+	option brightness '128'
+	option interval_enable '0'
+	option interval_on '10'
+	option interval_off '10'
+	option schedule_enable '0'
+	option schedule_start '20:00'
+	option schedule_end '23:00'
+
