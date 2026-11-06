@@ -66,6 +66,6 @@ make package/luci-app-xgp-v3-screen/compile V=s
 ## Credits & Upstream Source
 
 This project is extended and enhanced based on the original `luci-app-xgp-v3-screen-brightness` package by **zzzz0317**:
-* **Core Screen Rendering Package**: [ikhsanh/xgp-v3-screen](https://github.com/ikhsanh/xgp-v3-screen)
+* **Core Screen Rendering Package**: [ikhsanh/xgp-v3-screen](https://github.com/ikhsanh/xgp-v3-screen) (upstream: [zzzz0317/xgp-v3-screen](https://github.com/zzzz0317/xgp-v3-screen))
 * **Original LuCI Source**: [zzzz0317/immortalwrt-xgp-auto-build (luci-app-xgp-v3-screen-brightness)](https://github.com/zzzz0317/immortalwrt-xgp-auto-build/tree/main/zz-packages/luci-app-xgp-v3-screen-brightness)
 * **Interval Feature Reference**: [NateLol/luci-app-oled](https://github.com/NateLol/luci-app-oled)
